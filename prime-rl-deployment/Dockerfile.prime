@@ -1,11 +1,48 @@
 # Use the robust NVIDIA base (Solves CUDA/NCCL mismatches)
 FROM nvcr.io/nvidia/pytorch:25.03-py3
 
+# Set en_US.UTF-8 locale by default
+RUN echo "LC_ALL=en_US.UTF-8" >> /etc/environment
+
+# Set CUDA_HOME and update PATH
+ENV CUDA_HOME=/usr/local/cuda
+ENV PATH=$PATH:/usr/local/cuda/bin
+
+# Install packages
+RUN apt-get update && apt-get install -y --no-install-recommends --force-yes \
+    build-essential \
+    curl \
+    sudo \
+    git \
+    && apt-get clean autoclean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+# Download the latest installer
+ADD https://astral.sh/uv/install.sh /uv-installer.sh
+
+# Set install dir to location accessible to non-root users
+RUN INSTALLER_NO_MODIFY_PATH=1 UV_INSTALL_DIR="/usr/local/bin" sh /uv-installer.sh && rm /uv-installer.sh
+ENV PATH="/usr/local/bin:$PATH"
+ENV UV_PYTHON_INSTALL_DIR="/usr/local/share/uv/python"
+ENV UV_CACHE_DIR="/usr/local/share/uv/cache"
+
+# Install Python dependencies (The gradual copies help with caching)
 WORKDIR /app
+
+ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 
 # 1. Install uv via the package manager (pip)
 # We upgrade pip first to ensure compatibility, then grab uv.
-RUN pip install --upgrade pip && pip install uv
+
+RUN apt-get update && apt-get install -y \
+    --no-install-recommends \
+    --force-yes \
+    tmux \
+    vim \
+    curl \
+    git-lfs \
+    net-tools
+
+RUN pip install --upgrade pip
 
 # 2. Install Prime-RL / veRL dependencies using uv
 # --system: Installs into the global python environment (no venv needed)
@@ -23,13 +60,13 @@ RUN uv pip install --system flash-attn --no-build-isolation
 
 # 4. Install vLLM
 # Pinning ensures stability with the specific PyTorch version in the NVIDIA image
-RUN uv pip install --system "vllm>=0.6.3"
+RUN uv pip install --system "vllm>=0.11.0"
 
 # 5. Environment Variables for H200 optimization
 ENV NCCL_DEBUG=WARN
 ENV TORCH_NCCL_ASYNC_ERROR_HANDLING=1
 ENV VLLM_ATTENTION_BACKEND=FLASH_ATTN
-ENV TORCH_CUDA_ARCH_LIST="9.0a"
+ENV TORCH_CUDA_ARCH_LIST="9.0"
 
 # 6. Copy your GRPO script
 COPY train_grpo.py /app/train_grpo.py

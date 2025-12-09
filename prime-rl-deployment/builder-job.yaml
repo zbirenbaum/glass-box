@@ -20,7 +20,7 @@ spec:
   - name: kaniko-secret
     secret:
       # [CHANGE 2] Use the new GitHub secret
-      secretName: regcred
+      secretName: ghcr-cred
       items:
       - key: .dockerconfigjson
         path: config.json
