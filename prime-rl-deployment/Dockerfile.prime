@@ -38,15 +38,18 @@ WORKDIR /app
 # Install packages via uv
 # We use --system to install into the container's global environment
 # We also add --break-system-packages explicitly for safety, though the ENV var usually handles it.
-RUN uv pip install --system --break-system-packages \
+RUN uv pip install --system --break-system-packages --no-build-isolation \
+    hatchling \
     "prime-rl[vllm] @ git+https://github.com/PrimeIntellect-ai/prime-rl.git" \
     verl \
     "ray[default]" \
     wandb \
     tensorboard \
     flash-attn --no-build-isolation \
+    vllm
     # Install vLLM (pinned)
-    "vllm>=0.11.0"
+    # "vllm>=0.11.0"
+
 
 # 5. Copy scripts
 COPY train_grpo.py /app/train_grpo.py
