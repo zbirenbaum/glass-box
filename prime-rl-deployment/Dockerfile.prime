@@ -30,7 +30,7 @@ RUN uv pip install --system --break-system-packages --no-build-isolation \
     "ray[default]" \
     wandb \
     tensorboard \
-    flash-attn --no-build-isolation \
+    flash-attn \
     vllm
     # Install vLLM (pinned)
     # "vllm>=0.11.0"

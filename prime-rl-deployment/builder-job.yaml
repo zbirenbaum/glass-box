@@ -13,13 +13,30 @@ spec:
     - "--context-sub-path=prime-rl-deployment"
     - "--destination=ghcr.io/zbirenbaum/prime-rl:latest"
     - "--cache=true"
+    # --- PERFORMANCE FIXES START ---
+    # 1. Take only one snapshot at the end (prevents 5+ scans of the 20GB image)
+    - "--single-snapshot"
+    # 2. Ignore heavy static directories during build scanning
+    - "--ignore-path=/usr/local/cuda"
+    - "--ignore-path=/usr/lib/x86_64-linux-gnu"
+    # --- PERFORMANCE FIXES END ---
+    resources:
+      requests:
+        # Guarantees the node has this much available before starting
+        memory: "32Gi"
+        cpu: "24"
+        ephemeral-storage: "100Gi"
+      limits:
+        # Allows bursting up to this amount
+        memory: "64Gi"
+        cpu: "48"
+        ephemeral-storage: "400Gi"
     volumeMounts:
     - name: kaniko-secret
       mountPath: /kaniko/.docker
   volumes:
   - name: kaniko-secret
     secret:
-      # [CHANGE 2] Use the new GitHub secret
       secretName: ghcr-cred
       items:
       - key: .dockerconfigjson
