@@ -1,0 +1,16 @@
+FROM pytorch/pytorch:2.4.0-cuda12.1-cudnn9-devel
+
+WORKDIR /app
+
+# [FIX 1] Install Git so pip can clone Unsloth
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+
+# Install Unsloth and dependencies
+RUN pip install --upgrade pip && \
+    pip install "unsloth[colab-new] @ git+https://github.com/unslothai/unsloth.git" && \
+    pip install --no-deps "xformers<0.0.27" "trl<0.9.0" peft accelerate bitsandbytes
+
+# Install Qwen specific utils
+RUN pip install qwen-vl-utils
+
+COPY train_lora.py .

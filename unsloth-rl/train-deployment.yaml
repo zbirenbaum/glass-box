@@ -1,0 +1,70 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: qwen-lora-trainer
+spec:
+  replicas: 1 # Exactly one training node
+  selector:
+    matchLabels:
+      app: qwen-trainer
+  template:
+    metadata:
+      labels:
+        app: qwen-trainer
+    spec:
+      imagePullSecrets:
+      - name: regcred
+      containers:
+      - name: unsloth-trainer
+        image: zbirenbaum/qwen-unsloth:latest
+        command: ["/bin/bash", "-c"]
+        args:
+        - |
+          # Use accelerate for multi-GPU training
+          # Ensure your train_lora.py uses device_map="auto" or compatible distributed setting
+          accelerate launch --num_processes 8 --multi_gpu /app/train_lora.py
+          sleep infinity
+        
+        envFrom:
+        - secretRef:
+            name: qwen-env
+        
+        env:
+        - name: AWS_REGION
+          value: "US-WEST-04"
+        
+        resources:
+          limits:
+            nvidia.com/gpu: 8 # <--- TAKES THE FULL NODE
+            memory: "800Gi"   # Requesting massive system RAM
+            cpu: "2"        # Most of the node's CPU
+          requests:
+            nvidia.com/gpu: 8
+            memory: "800Gi"
+            cpu: "100"
+            
+        volumeMounts:
+        - name: model-cache
+          mountPath: /data/base_model
+        - name: lora-storage
+          mountPath: /data/lora_adapters
+          
+      volumes:
+      - name: model-cache
+        persistentVolumeClaim:
+          claimName: qwen-weights-pvc
+      - name: lora-storage
+        persistentVolumeClaim:
+          claimName: lora-weights-pvc
+      
+      # Optional: Anti-affinity to ensure it doesn't share a node (redundant with 8 GPU request but good practice)
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - qwen-serve
+            topologyKey: "kubernetes.io/hostname"

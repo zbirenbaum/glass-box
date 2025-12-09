@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: qwen-weights-pvc
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: shared-vast  # <--- EXACT MATCH FROM YOUR OUTPUT
+  resources:
+    requests:
+      storage: 1000Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: lora-weights-pvc
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: shared-vast  # <--- EXACT MATCH FROM YOUR OUTPUT
+  resources:
+    requests:
+      storage: 100Gi
