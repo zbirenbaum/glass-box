@@ -7,7 +7,6 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 # 2. Set Environment Variables
 ENV CUDA_HOME=/usr/local/cuda \
     PATH="/usr/local/cuda/bin:/usr/local/bin:$PATH" \
-    LC_ALL=en_US.UTF-8 \
     PIP_BREAK_SYSTEM_PACKAGES=1 \
     UV_PYTHON_INSTALL_DIR="/usr/local/share/uv/python" \
     UV_CACHE_DIR="/usr/local/share/uv/cache" \
@@ -17,20 +16,6 @@ ENV CUDA_HOME=/usr/local/cuda \
     TORCH_NCCL_ASYNC_ERROR_HANDLING=1 \
     VLLM_ATTENTION_BACKEND=FLASH_ATTN \
     TORCH_CUDA_ARCH_LIST="9.0"
-
-# 3. Install System Dependencies (Consolidated)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    curl \
-    git \
-    git-lfs \
-    net-tools \
-    sudo \
-    tmux \
-    vim \
-    && apt-get clean autoclean \
-    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
-    && echo "LC_ALL=en_US.UTF-8" >> /etc/environment
 
 # 4. Install Python Dependencies
 WORKDIR /app
