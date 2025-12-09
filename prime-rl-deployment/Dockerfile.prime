@@ -1,72 +1,52 @@
-# Use the robust NVIDIA base (Solves CUDA/NCCL mismatches)
+# Use the robust NVIDIA base
 FROM nvcr.io/nvidia/pytorch:25.03-py3
 
-# Set en_US.UTF-8 locale by default
-RUN echo "LC_ALL=en_US.UTF-8" >> /etc/environment
+# 1. Install 'uv' using the official multi-stage image
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-# Set CUDA_HOME and update PATH
-ENV CUDA_HOME=/usr/local/cuda
-ENV PATH=$PATH:/usr/local/cuda/bin
+# 2. Set Environment Variables
+ENV CUDA_HOME=/usr/local/cuda \
+    PATH="/usr/local/cuda/bin:/usr/local/bin:$PATH" \
+    LC_ALL=en_US.UTF-8 \
+    PIP_BREAK_SYSTEM_PACKAGES=1 \
+    UV_PYTHON_INSTALL_DIR="/usr/local/share/uv/python" \
+    UV_CACHE_DIR="/usr/local/share/uv/cache" \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    NCCL_DEBUG=WARN \
+    TORCH_NCCL_ASYNC_ERROR_HANDLING=1 \
+    VLLM_ATTENTION_BACKEND=FLASH_ATTN \
+    TORCH_CUDA_ARCH_LIST="9.0"
 
-# Install packages
-RUN apt-get update && apt-get install -y --no-install-recommends --force-yes \
+# 3. Install System Dependencies (Consolidated)
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
-    sudo \
     git \
-    && apt-get clean autoclean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
-# Download the latest installer
-ADD https://astral.sh/uv/install.sh /uv-installer.sh
-
-# Set install dir to location accessible to non-root users
-RUN INSTALLER_NO_MODIFY_PATH=1 UV_INSTALL_DIR="/usr/local/bin" sh /uv-installer.sh && rm /uv-installer.sh
-ENV PATH="/usr/local/bin:$PATH"
-ENV UV_PYTHON_INSTALL_DIR="/usr/local/share/uv/python"
-ENV UV_CACHE_DIR="/usr/local/share/uv/cache"
-
-# Install Python dependencies (The gradual copies help with caching)
-WORKDIR /app
-
-ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
-
-# 1. Install uv via the package manager (pip)
-# We upgrade pip first to ensure compatibility, then grab uv.
-
-RUN apt-get update && apt-get install -y \
-    --no-install-recommends \
-    --force-yes \
+    git-lfs \
+    net-tools \
+    sudo \
     tmux \
     vim \
-    curl \
-    git-lfs \
-    net-tools
+    && apt-get clean autoclean \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* \
+    && echo "LC_ALL=en_US.UTF-8" >> /etc/environment
 
-RUN pip install --upgrade pip
+# 4. Install Python Dependencies
+WORKDIR /app
 
-# 2. Install Prime-RL / veRL dependencies using uv
-# --system: Installs into the global python environment (no venv needed)
-# --no-cache: Keeps the image slim
-RUN uv pip install --system \
+# Install packages via uv
+# We use --system to install into the container's global environment
+# We also add --break-system-packages explicitly for safety, though the ENV var usually handles it.
+RUN uv pip install --system --break-system-packages \
     "prime-rl[vllm] @ git+https://github.com/PrimeIntellect-ai/prime-rl.git" \
     verl \
     "ray[default]" \
     wandb \
-    tensorboard
+    tensorboard \
+    flash-attn --no-build-isolation \
+    # Install vLLM (pinned)
+    "vllm>=0.11.0"
 
-# 3. Verify/Install Flash Attention
-# We use --no-build-isolation to respect the container's pre-built CUDA extensions
-RUN uv pip install --system flash-attn --no-build-isolation
-
-# 4. Install vLLM
-# Pinning ensures stability with the specific PyTorch version in the NVIDIA image
-RUN uv pip install --system "vllm>=0.11.0"
-
-# 5. Environment Variables for H200 optimization
-ENV NCCL_DEBUG=WARN
-ENV TORCH_NCCL_ASYNC_ERROR_HANDLING=1
-ENV VLLM_ATTENTION_BACKEND=FLASH_ATTN
-ENV TORCH_CUDA_ARCH_LIST="9.0"
-
-# 6. Copy your GRPO script
+# 5. Copy scripts
 COPY train_grpo.py /app/train_grpo.py
