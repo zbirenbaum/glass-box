@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: prime-rl-image-builder
+spec:
+  restartPolicy: Never
+  containers:
+  - name: kaniko
+    image: gcr.io/kaniko-project/executor:v1.23.2
+    args:
+    - "--dockerfile=Dockerfile.prime"
+    - "--context=git://github.com/zbirenbaum/glass-box.git#main"
+    - "--context-sub-path=prime-rl-deployment"
+    - "--destination=ghcr.io/zbirenbaum/prime-rl:latest"
+    - "--cache=true"
+    volumeMounts:
+    - name: kaniko-secret
+      mountPath: /kaniko/.docker
+  volumes:
+  - name: kaniko-secret
+    secret:
+      # [CHANGE 2] Use the new GitHub secret
+      secretName: regcred
+      items:
+      - key: .dockerconfigjson
+        path: config.json

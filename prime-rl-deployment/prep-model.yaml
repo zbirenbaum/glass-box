@@ -1,0 +1,85 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: prep-qwen-weights
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      imagePullSecrets:
+      - name: ghcr-cred
+      containers:
+      - name: prep
+        image: ghcr.io/zbirenbaum/prime-rl:latest
+        command: ["/bin/bash", "-c"]
+        env:
+        # --- SECRETS (Keys) ---
+        - name: AWS_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: caios-creds
+              key: AWS_ACCESS_KEY_ID
+        - name: AWS_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: caios-creds
+              key: AWS_SECRET_ACCESS_KEY
+        - name: AWS_REGION
+          value: "US-WEST-04"
+        
+        # --- CONFIGURATION (Paths) ---
+        - name: S3_MODEL_PATH
+          valueFrom:
+            configMapKeyRef:
+              name: model-config
+              key: S3_MODEL_PATH
+        - name: S3_ENDPOINT
+          valueFrom:
+            configMapKeyRef:
+              name: model-config
+              key: S3_ENDPOINT
+
+        args:
+        - |
+          set -e # Fail immediately if any command fails
+          echo "--- Environment Setup ---"
+          echo "Source S3: $S3_MODEL_PATH"
+          echo "Endpoint:  $S3_ENDPOINT"
+          
+          # Install AWS CLI
+          uv pip install --system awscli
+
+          # Dynamically determine the folder name from the S3 path
+          # e.g., "s3://bucket/Qwen3" -> "Qwen3"
+          MODEL_NAME=$(basename "$S3_MODEL_PATH")
+          TARGET_DIR="/data/models/$MODEL_NAME"
+          
+          echo "Target Dir: $TARGET_DIR"
+
+          # 1. Sync from S3 (Only downloads missing/changed files)
+          echo "--- Syncing Model ---"
+          aws s3 sync "$S3_MODEL_PATH" "$TARGET_DIR" \
+              --endpoint-url "$S3_ENDPOINT" \
+              --no-sign-request
+
+          # 2. Verification
+          echo "--- Verifying ---"
+          if [ -f "$TARGET_DIR/config.json" ]; then
+             echo "SUCCESS: $MODEL_NAME is ready at $TARGET_DIR"
+          else
+             echo "ERROR: config.json not found in $TARGET_DIR"
+             ls -lh "$TARGET_DIR"
+             exit 1
+          fi
+        
+        resources:
+          limits:
+            cpu: 4
+            memory: 16Gi
+        volumeMounts:
+        - name: model-storage
+          mountPath: /data/models
+      volumes:
+      - name: model-storage
+        persistentVolumeClaim:
+          claimName: qwen-weights-pvc

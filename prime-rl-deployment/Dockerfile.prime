@@ -1,0 +1,35 @@
+# Use the robust NVIDIA base (Solves CUDA/NCCL mismatches)
+FROM nvcr.io/nvidia/pytorch:25.03-py3
+
+WORKDIR /app
+
+# 1. Install uv via the package manager (pip)
+# We upgrade pip first to ensure compatibility, then grab uv.
+RUN pip install --upgrade pip && pip install uv
+
+# 2. Install Prime-RL / veRL dependencies using uv
+# --system: Installs into the global python environment (no venv needed)
+# --no-cache: Keeps the image slim
+RUN uv pip install --system \
+    "prime-rl[vllm] @ git+https://github.com/PrimeIntellect-ai/prime-rl.git" \
+    verl \
+    "ray[default]" \
+    wandb \
+    tensorboard
+
+# 3. Verify/Install Flash Attention
+# We use --no-build-isolation to respect the container's pre-built CUDA extensions
+RUN uv pip install --system flash-attn --no-build-isolation
+
+# 4. Install vLLM
+# Pinning ensures stability with the specific PyTorch version in the NVIDIA image
+RUN uv pip install --system "vllm>=0.6.3"
+
+# 5. Environment Variables for H200 optimization
+ENV NCCL_DEBUG=WARN
+ENV TORCH_NCCL_ASYNC_ERROR_HANDLING=1
+ENV VLLM_ATTENTION_BACKEND=FLASH_ATTN
+ENV TORCH_CUDA_ARCH_LIST="9.0a"
+
+# 6. Copy your GRPO script
+COPY train_grpo.py /app/train_grpo.py
